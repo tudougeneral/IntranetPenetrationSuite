@@ -6,54 +6,55 @@
 import requests
 from colorama import Fore, Style
 
-# 指纹特征库
-FINGERPRINTS = {
-    'nginx': ['nginx', 'Nginx'],
-    'apache': ['Apache', 'apache'],
-    'IIS': ['Microsoft-IIS', 'IIS'],
-    'PHP': ['PHP', 'php'],
-    'ASP.NET': ['ASP.NET', 'asp.net'],
-    'Java': ['Java', 'JSP', 'Servlet'],
-    'Python': ['Python', 'Django', 'Flask'],
-    'WordPress': ['wp-content', 'wp-includes', 'WordPress'],
-    'DedeCMS': ['dedecms', 'DedeCMS'],
-    'ThinkPHP': ['thinkphp', 'ThinkPHP'],
-    'jQuery': ['jquery', 'jQuery'],
-    'Bootstrap': ['bootstrap', 'Bootstrap'],
-}
+import json
+import os
 
+# 加载外部指纹库
+def load_fingerprints(config_path='config/fingerprints.json'):
+    if os.path.isfile(config_path):
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
 
-def detect_server(response):
-    """识别Web服务器"""
-    server = response.headers.get('Server', '')
-    if server:
-        for key in FINGERPRINTS:
-            if key.lower() in server.lower():
-                return key
-    return None
+FINGERPRINTS = load_fingerprints()
 
-
-def detect_framework(response):
-    """识别框架/CMS"""
+def detect_from_response(response):
+    """根据响应全方位识别指纹"""
     detected = []
+    headers = {k.lower(): v.lower() for k, v in response.headers.items()}
     html = response.text.lower()
+    cookies = [c.name.lower() for c in response.cookies]
 
-    for name, signatures in FINGERPRINTS.items():
-        for sig in signatures:
-            if sig.lower() in html or sig.lower() in str(response.headers):
-                detected.append(name)
-                break
-
-    return list(set(detected))
-
-
-def detect_powered_by(response):
-    """识别后端语言"""
-    powered_by = response.headers.get('X-Powered-By', '')
-    if powered_by:
-        return powered_by
-    return None
-
+    for category, rules in FINGERPRINTS.items():
+        for rule in rules:
+            name = rule['name']
+            match = False
+            
+            # 1. 检查头部
+            if 'headers' in rule:
+                for k, v in rule['headers'].items():
+                    if k.lower() in headers and v.lower() in headers[k.lower()]:
+                        match = True
+                        break
+            
+            # 2. 检查文本
+            if not match and 'text' in rule:
+                for sig in rule['text']:
+                    if sig.lower() in html:
+                        match = True
+                        break
+            
+            # 3. 检查 Cookie
+            if not match and 'cookies' in rule:
+                for sig in rule['cookies']:
+                    if any(sig.lower() in c for c in cookies):
+                        match = True
+                        break
+            
+            if match:
+                detected.append({'name': name, 'category': category})
+                
+    return detected
 
 def scan(url, timeout=10):
     """
@@ -63,29 +64,23 @@ def scan(url, timeout=10):
     print(f"\n[*] 目标URL: {url}")
 
     try:
-        resp = requests.get(url, timeout=timeout, headers={'User-Agent': 'Mozilla/5.0'})
+        resp = requests.get(url, timeout=timeout, headers={'User-Agent': 'Mozilla/5.0'}, verify=False)
     except Exception as e:
         print(f"{Fore.RED}[!] 连接失败: {e}{Style.RESET_ALL}")
         return None
 
-    result = {
-        'url': url,
-        'status_code': resp.status_code,
-        'server': detect_server(resp),
-        'powered_by': detect_powered_by(resp),
-        'frameworks': detect_framework(resp),
-    }
-
+    results = detect_from_response(resp)
+    
     print(f"\n{Fore.GREEN}[+] 扫描结果{Style.RESET_ALL}")
-    print(f"  状态码: {result['status_code']}")
-    if result['server']:
-        print(f"  Web服务器: {result['server']}")
-    if result['powered_by']:
-        print(f"  后端语言: {result['powered_by']}")
-    if result['frameworks']:
-        print(f"  框架/CMS: {', '.join(result['frameworks'])}")
+    print(f"  状态码: {resp.status_code}")
+    
+    if results:
+        for res in results:
+            print(f"  [{res['category']}] {res['name']}")
+    else:
+        print("  未识别到指纹")
 
-    return result
+    return results
 
 
 if __name__ == '__main__':
