@@ -1,0 +1,16 @@
+{
+  "threads": 10,
+  "timeout": 5,
+  "max_rps": 12,
+  "max_retries": 3,
+  "max_crawl_urls": 200,
+  "depth": 2,
+  "verbose": false,
+  "quiet": false,
+  "strict_scope": false,
+  "enable_json_fuzz": false,
+  "enable_open_redirect": true,
+  "enable_header_audit": true,
+  "proxy": "",
+  "proxy_file": ""
+}

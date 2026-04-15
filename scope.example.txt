@@ -1,0 +1,4 @@
+# 每行一个授权范围内的域名或根 URL（与 SRC 公告一致）
+# 示例（请替换为你的目标）：
+# www.example.edu.cn
+# https://btsrc.example.com/
